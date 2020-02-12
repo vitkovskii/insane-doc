@@ -40,7 +40,7 @@ var (
 		Template string   `yaml:"template"`
 	}, 0)
 
-	footer = "\n\n*Generated using __insane-doc__*"
+	footer = "\n\n*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*"
 )
 
 type context struct {
@@ -435,5 +435,4 @@ func main() {
 			run(x.Files, template)
 		}
 	}
-
 }
