@@ -35,12 +35,16 @@ var (
 
 	file = kingpin.Flag("file", "file").Default("./").Short('f').String()
 
-	config = make([]struct {
-		Files    []string `yaml:"files"`
-		Template string   `yaml:"template"`
-	}, 0)
+	config = struct {
+		Templates []struct {
+			Files    []string `yaml:"files"`
+			Template string   `yaml:"template"`
+		} `yaml:"templates"`
+		Extractors map[string]string `yaml:"extractors"`
+		Decorators map[string]string `yaml:"decorators"`
+	}{}
 
-	footer = "\n\n*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*"
+	footer = "\n<br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*"
 )
 
 type context struct {
@@ -158,40 +162,19 @@ func parseTerm(lines []string, term string, rest string) []string {
 
 		return lines
 	case termExtractor:
-		parts := strings.Fields(lines[0])
-		parts = parts[1:]
-		if len(parts) == 0 {
-			logger.Fatalf("empty extractor")
-		}
+		logger.Infof("will switch to extractors: %s", rest)
 		ctx.extractors = ctx.extractors[:0]
 		ctx.decorators = ctx.decorators[:0]
-		for _, part := range parts {
-			ctx.extractors = append(ctx.extractors, NewExtractor(part))
-		}
 
-		if len(ctx.extractors) == 1 {
-			ctx.extractors = append(ctx.extractors, NewExtractor(""))
-		}
-
-		if len(ctx.extractors) == 2 {
-			ctx.extractors = append(ctx.extractors, NewExtractor("undefined"))
-		}
-
-		logger.Infof("ctx extractors switched: %s", strings.Join(parts, ", "))
+		parseExtractors(rest)
 		lines = nextLine(lines)
+
 		return lines
 	case termDecorator:
-		parts := strings.Fields(lines[0])
-		parts = parts[1:]
-		if len(parts) == 0 {
-			logger.Fatalf("empty decorator")
-		}
+		logger.Infof("will switch to decorators: %s", rest)
 		ctx.decorators = ctx.decorators[:0]
-		for _, part := range parts {
-			ctx.decorators = append(ctx.decorators, NewDecorator(part))
-		}
+		parseDecorators(rest)
 
-		logger.Infof("ctx decorators switched: %s", strings.Join(parts, ", "))
 		lines = nextLine(lines)
 		return lines
 	case termItem:
@@ -209,11 +192,94 @@ func parseTerm(lines []string, term string, rest string) []string {
 	panic("wtf?")
 }
 
+func parseExtractors(line string) {
+	extractors := config.Extractors[strings.TrimSpace(line)]
+	if extractors != "" {
+		parseExtractors(extractors)
+		return
+	}
+
+	source := line
+	for len(line) > 0 {
+		c := line[0]
+		line = line[1:]
+		if c == '#' {
+			x := strings.IndexByte(line, ' ')
+			ctx.extractors = append(ctx.extractors, &extractor{t: extractorTypeSplit, data: line[0:x]})
+			line = line[x:]
+			continue
+		}
+		if c == '/' {
+			x := strings.IndexByte(line[0:], '/')
+			ctx.extractors = append(ctx.extractors, &extractor{t: extractorTypeRegexp, data: line[0:x]})
+			line = line[x+1:]
+			continue
+		}
+
+		if c == '"' {
+			x := strings.IndexByte(line[0:], '"')
+			ctx.extractors = append(ctx.extractors, &extractor{t: extractorTypeConst, data: line[0:x]})
+			line = line[x+1:]
+			continue
+		}
+
+		if c == '_' {
+			ctx.extractors = append(ctx.extractors, &extractor{t: extractorTypeConst, data: ""})
+		}
+
+		if c == ' ' {
+			continue
+		}
+
+		logger.Fatalf("unexpected char %q for extractor: %s", c, source)
+	}
+
+	if len(ctx.extractors) == 1 {
+		ctx.extractors = append(ctx.extractors, &extractor{t: extractorTypeConst, data: ""})
+	}
+
+	if len(ctx.extractors) == 2 {
+		ctx.extractors = append(ctx.extractors, &extractor{t: extractorTypeConst, data: "undefined"})
+	}
+}
+
+func parseDecorators(line string) {
+	decorators := config.Decorators[strings.TrimSpace(line)]
+	if decorators != "" {
+		parseDecorators(decorators)
+		return
+	}
+
+	source := line
+	for len(line) > 0 {
+		c := line[0]
+		line = line[1:]
+		if c == '/' {
+			x := strings.IndexByte(line[0:], '/')
+			ctx.decorators = append(ctx.decorators, &decorator{t: decoratorTypePattern, data: line[0:x]})
+			line = line[x+1:]
+			continue
+		}
+
+		if c == '_' {
+			ctx.decorators = append(ctx.decorators, &decorator{t: decoratorTypeNo})
+			continue
+		}
+
+		if c == ' ' {
+			continue
+		}
+
+		logger.Fatalf("unexpected char %q for decorator: %s", c, source)
+	}
+}
+
 func substitute(content string) string {
 	result := ""
 	for len(content) != 0 {
 		st := strings.IndexByte(content, termInsert)
 		if st == -1 {
+			logger.Infof("tail: %q", content)
 			result += content
 			break
 		}
@@ -228,7 +294,7 @@ func substitute(content string) string {
 		command := ""
 		for len(content) != 0 {
 			c := content[0]
-			if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '|' || c == '.' || c == '-' || c == '@' {
+			if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '|' || c == '.' || c == '-' {
 				command = command + string(c)
 				content = content[1:]
 				continue
@@ -237,8 +303,9 @@ func substitute(content string) string {
 			break
 		}
 		// some strange escaping
-		if command[0] == termInsert {
+		if len(content) > 0 && content[0] == termInsert && len(command) == 0 {
 			result += command
+			content = content[1:]
 			continue
 		}
 
@@ -258,6 +325,7 @@ func substitute(content string) string {
 func doCmd(cmd string, valueName string) string {
 	value := ctx.values[valueName]
 	if value == nil {
+		logger.Infof("#v", ctx.values)
 		logger.Fatalf("can't find value: %q", valueName)
 		panic("_")
 	}
@@ -274,9 +342,7 @@ func doCmd(cmd string, valueName string) string {
 				addVal(strconv.Itoa(i+1), "", e, nil, "")
 			}
 
-			result = append(result, "### "+item.key)
-			result = append(result, "")
-			result = append(result, substitute(item.comment))
+			result = append(result, "- **`"+item.key+"`** "+substitute(item.comment)+"<br><br>\n")
 		}
 		return strings.Join(result, "\n")
 	case "comment-list":
@@ -357,6 +423,9 @@ func run(files []string, template string) {
 	out := strings.Replace(template, ".idoc", "", 1)
 
 	resetCtx()
+	logger.Infof(" ")
+	logger.Infof("====== PROCESSING %s ======", template)
+	logger.Infof("  ")
 
 	for _, pattern := range files {
 		matches, err := filepath.Glob(filepath.Join(path, pattern))
@@ -392,7 +461,7 @@ func run(files []string, template string) {
 	introduction := ctx.values["introduction"]
 	descr := ""
 	if introduction != nil {
-		descr = introduction.def.payload
+		descr = substitute(introduction.def.payload)
 	}
 	addVal(contentValName, filepath.Base(templateDir), out, nil, descr)
 
@@ -425,7 +494,7 @@ func main() {
 		logger.Fatalf(err.Error())
 	}
 
-	for _, x := range config {
+	for _, x := range config.Templates {
 		matches, err := filepath.Glob(x.Template)
 		if err != nil {
 			logger.Panicf(err.Error())
