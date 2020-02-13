@@ -37,8 +37,9 @@ var (
 
 	config = struct {
 		Templates []struct {
-			Files    []string `yaml:"files"`
-			Template string   `yaml:"template"`
+			Files         []string `yaml:"files"`
+			Template      string   `yaml:"template"`
+			DisableFooter bool     `yaml:"disable_footer"`
 		} `yaml:"templates"`
 		Extractors map[string]string `yaml:"extractors"`
 		Decorators map[string]string `yaml:"decorators"`
@@ -110,7 +111,7 @@ func addVal(name string, key string, payload string, extracted [] string, commen
 		ctx.values[name] = val
 	}
 
-	if comment == "" {
+	if strings.TrimSpace(comment) == "" {
 		comment = ctx.comment
 		ctx.comment = ""
 	}
@@ -342,7 +343,7 @@ func doCmd(cmd string, valueName string) string {
 				addVal(strconv.Itoa(i+1), "", e, nil, "")
 			}
 
-			result = append(result, "- **`"+item.key+"`** "+substitute(item.comment)+"<br><br>\n")
+			result = append(result, "**`"+item.key+"`** "+substitute(item.comment)+"\n<br>\n")
 		}
 		return strings.Join(result, "\n")
 	case "comment-list":
@@ -362,10 +363,10 @@ func doCmd(cmd string, valueName string) string {
 				addVal(strconv.Itoa(i+1), "", e, nil, "")
 			}
 
-			result = append(result, "`"+item.payload+"`<br>"+item.comment)
+			result = append(result, "`"+item.payload+"`\n\n"+item.comment)
 		}
-		logger.Infof(strings.Join(result, "<br><br>\n"))
-		return strings.Join(result, "<br><br>\n")
+
+		return strings.Join(result, "\n<br>\n\n")
 	case "options":
 		result := make([]string, 0)
 		for _, data := range value.data {
@@ -386,6 +387,12 @@ func doCmd(cmd string, valueName string) string {
 			result = append(result, fmt.Sprintf("[%s](%s)", data.key, data.payload))
 		}
 		return strings.Join(result, ", ")
+	case "links-list":
+		result := make([]string, 0)
+		for _, data := range value.data {
+			result = append(result, fmt.Sprintf("    - [%s](%s)\n", data.key, data.payload))
+		}
+		return strings.Join(result, "")
 	}
 
 	logger.Fatalf("unknown command: %q", cmd)
@@ -416,7 +423,7 @@ func resetCtx() {
 	ctx.extractors = ctx.extractors[:0]
 }
 
-func run(files []string, template string) {
+func run(files []string, template string, disableFooter bool) {
 	logger.Infof("found template file: %s", template)
 	path := filepath.Dir(template)
 
@@ -450,7 +457,11 @@ func run(files []string, template string) {
 		panic("_")
 	}
 
-	content := substitute(getFile(template) + footer)
+	content := substitute(getFile(template))
+	if !disableFooter {
+		content += footer
+	}
+
 	_, err = f.WriteString(content)
 	if err != nil {
 		logger.Fatalf("can't write output file %s: %s", out, err.Error())
@@ -501,7 +512,7 @@ func main() {
 		}
 
 		for _, template := range matches {
-			run(x.Files, template)
+			run(x.Files, template, x.DisableFooter)
 		}
 	}
 }
