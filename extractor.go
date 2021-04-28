@@ -1,7 +1,7 @@
 package main
 
 import (
-	"insane-doc/logger"
+	"github.com/vitkovskii/insane-doc/logger"
 	"regexp"
 	"strconv"
 	"strings"

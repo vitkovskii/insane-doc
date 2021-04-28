@@ -1,4 +1,4 @@
-module insane-doc
+module github.com/vitkovskii/insane-doc
 
 go 1.13
 

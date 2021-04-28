@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"insane-doc/logger"
+	"github.com/vitkovskii/insane-doc/logger"
 	"io/ioutil"
 	"os"
 	"path/filepath"
