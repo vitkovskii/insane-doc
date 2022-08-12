@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/vitkovskii/insane-doc/logger"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/vitkovskii/insane-doc/logger"
 
 	"github.com/alecthomas/kingpin"
 	"gopkg.in/yaml.v2"
@@ -16,10 +17,10 @@ import (
 const (
 	termBlockStart = `/*{`
 	termBlockEnd   = `}*/`
-	termExtractor  = `//!`
-	termDecorator  = `//^`
-	termItem       = `//*`
-	termDesc       = `//>`
+	termExtractor  = `// !`
+	termDecorator  = `// ^`
+	termItem       = `// *`
+	termDesc       = `// >`
 	termInsert     = '@'
 )
 
@@ -102,7 +103,7 @@ func parseOne(lines []string) []string {
 	return nextLine(lines)
 }
 
-func addVal(name string, key string, payload string, extracted [] string, comment string) {
+func addVal(name string, key string, payload string, extracted []string, comment string) {
 	val, has := ctx.values[name]
 	if !has {
 		val = &value{
@@ -133,7 +134,7 @@ func addVal(name string, key string, payload string, extracted [] string, commen
 	logger.Infof("added val: %s.%s=%s", name, key, payload)
 }
 
-func extract(lines [] string) []string {
+func extract(lines []string) []string {
 	values := make([]string, 0)
 	for _, extractor := range ctx.extractors {
 		values = append(values, extractor.extract(lines[0]))
