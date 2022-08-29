@@ -91,7 +91,7 @@ func nextLine(lines []string) []string {
 	return lines
 }
 
-func parseOne(lines []string) []string {
+func parseFileLine(lines []string) []string {
 	for term := range startTerms {
 		pos := strings.Index(lines[0], term)
 		// no control structures on this line
@@ -103,7 +103,7 @@ func parseOne(lines []string) []string {
 	return nextLine(lines)
 }
 
-func addVal(name string, key string, payload string, extracted []string, comment string) {
+func addValues(name string, key string, payload string, extracted []string, comment string) {
 	val, has := ctx.values[name]
 	if !has {
 		val = &value{
@@ -146,6 +146,8 @@ func extract(lines []string) []string {
 func parseTerm(lines []string, term string, rest string) []string {
 	switch term {
 	case termBlockStart:
+		logger.Infof("found block start: %s", lines[0])
+
 		parts := strings.Fields(lines[0])
 		name := parts[1]
 		lines = nextLine(lines)
@@ -160,7 +162,7 @@ func parseTerm(lines []string, term string, rest string) []string {
 			lines = nextLine(lines)
 		}
 
-		addVal(name, "", strings.Join(text, "\n"), nil, "")
+		addValues(name, "", strings.Join(text, "\n"), nil, "")
 
 		return lines
 	case termExtractor:
@@ -180,12 +182,16 @@ func parseTerm(lines []string, term string, rest string) []string {
 		lines = nextLine(lines)
 		return lines
 	case termItem:
+		termLine := lines[0]
 		extracted := extract(lines)
 		for i, decorator := range ctx.decorators {
 			extracted[i] = decorator.decorate(extracted[i])
 		}
+		if len(extracted) < 2 {
+			logger.Panicf("no extracted params for item term: %s", termLine)
+		}
 		logger.Infof("item found %s.%s", extracted[0], extracted[1])
-		addVal(extracted[0], extracted[1], extracted[2], extracted, rest)
+		addValues(extracted[0], extracted[1], extracted[2], extracted, rest)
 		lines = nextLine(lines)
 		return lines
 	}
@@ -341,7 +347,7 @@ func doCmd(cmd string, valueName string) string {
 		result := make([]string, 0)
 		for _, item := range value.data {
 			for i, e := range item.extracted {
-				addVal(strconv.Itoa(i+1), "", e, nil, "")
+				addValues(strconv.Itoa(i+1), "", e, nil, "")
 			}
 
 			result = append(result, "**`"+item.key+"`** "+substitute(item.comment)+"\n<br>\n")
@@ -351,7 +357,7 @@ func doCmd(cmd string, valueName string) string {
 		result := make([]string, 0)
 		for _, item := range value.data {
 			for i, e := range item.extracted {
-				addVal(strconv.Itoa(i+1), "", e, nil, "")
+				addValues(strconv.Itoa(i+1), "", e, nil, "")
 			}
 
 			result = append(result, "* "+item.comment)
@@ -361,7 +367,7 @@ func doCmd(cmd string, valueName string) string {
 		result := make([]string, 0)
 		for _, item := range value.data {
 			for i, e := range item.extracted {
-				addVal(strconv.Itoa(i+1), "", e, nil, "")
+				addValues(strconv.Itoa(i+1), "", e, nil, "")
 			}
 
 			result = append(result, "`"+item.payload+"`\n\n"+item.comment)
@@ -402,7 +408,7 @@ func doCmd(cmd string, valueName string) string {
 
 func parseFile(lines []string) {
 	for len(lines) > 0 {
-		lines = parseOne(lines)
+		lines = parseFileLine(lines)
 	}
 }
 
@@ -447,7 +453,7 @@ func run(files []string, template string, disableFooter bool) {
 		}
 
 		for _, file := range matches {
-			logger.Infof("adding file %s", file)
+			logger.Infof("parsing file %s", file)
 			parseFile(getFileLines(file))
 		}
 	}
@@ -475,8 +481,8 @@ func run(files []string, template string, disableFooter bool) {
 	if introduction != nil {
 		descr = substitute(introduction.def.payload)
 	}
-	addVal(contentValName, filepath.Base(templateDir), out, nil, descr)
 
+	addValues(contentValName, filepath.Base(templateDir), out, nil, descr)
 }
 
 func main() {
