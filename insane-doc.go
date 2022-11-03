@@ -84,7 +84,11 @@ func getFile(filename string) string {
 func nextLine(lines []string) []string {
 	pos := strings.Index(lines[0], termDesc)
 	if pos != -1 {
-		ctx.comment += strings.TrimSpace(lines[0][pos+len(termDesc):]) + "\n"
+		c := lines[0][pos+len(termDesc):]
+		if len(c) > 0 && c[0] == ' ' {
+			c = c[1:]
+		}
+		ctx.comment += c + "\n"
 	}
 	lines = lines[1:]
 
@@ -351,6 +355,16 @@ func doCmd(cmd string, valueName string) string {
 			}
 
 			result = append(result, "**`"+item.key+"`** "+substitute(item.comment)+"\n<br>\n")
+		}
+		return strings.Join(result, "\n")
+	case "header-description":
+		result := make([]string, 0)
+		for _, item := range value.data {
+			for i, e := range item.extracted {
+				addValues(strconv.Itoa(i+1), "", e, nil, "")
+			}
+
+			result = append(result, "#### "+item.key+"\n"+substitute(item.comment)+"\n<br>\n")
 		}
 		return strings.Join(result, "\n")
 	case "comment-list":
